@@ -1,0 +1,992 @@
+<!DOCTYPE html>
+<html lang="ta">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>நீர் காவல் — NEERKAVAL</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@500;600;700;800&family=Noto+Sans+Tamil:wght@500;600;700;800&family=Noto+Sans+Devanagari:wght@500;600;700;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<style>
+/* ============ TOKENS ============ */
+:root{
+  --teal-900:#083942; --teal-700:#0B5D6B; --teal-600:#116E7E; --teal-100:#E4F2F1;
+  --ink:#122B30; --ink-soft:#3E5B60;
+  --paper:#FAFAF8; --paper-raised:#FFFFFF; --line:#D8E4E2;
+  --safe:#1E8E5A; --safe-bg:#E7F6EE;
+  --caution:#B8860B; --caution-bg:#FFF6DD;
+  --warn:#C15A0E; --warn-bg:#FFEEE0;
+  --high:#C62828; --high-bg:#FDE7E7;
+  --critical:#7A0C0C; --critical-bg:#3A0808; --critical-fg:#FFF3F3;
+  --focus:#0B5D6B;
+  --radius-s:10px; --radius-m:16px; --radius-l:22px;
+  --font-latin:'Inter',system-ui,sans-serif;
+  --font-ta:'Noto Sans Tamil','Inter',system-ui,sans-serif;
+  --font-hi:'Noto Sans Devanagari','Inter',system-ui,sans-serif;
+  --sat-top:env(safe-area-inset-top,0px);
+  --sat-bottom:env(safe-area-inset-bottom,0px);
+}
+:root[data-theme="dark"]{
+  --paper:#0E1B1D; --paper-raised:#152A2D; --line:#263E41; --ink:#EAF3F2; --ink-soft:#AFC7C6; --teal-100:#12363A;
+}
+*{box-sizing:border-box;}
+html{scroll-padding-top:var(--sat-top);}
+html,body{height:100%;}
+body{
+  margin:0; background:var(--paper); color:var(--ink);
+  font-family:var(--font-ta); line-height:1.45;
+  padding-top:var(--sat-top); padding-bottom:var(--sat-bottom);
+  -webkit-tap-highlight-color:transparent;
+}
+body[data-lang="en"]{font-family:var(--font-latin);}
+body[data-lang="hi"]{font-family:var(--font-hi);}
+h1,h2,h3{margin:0; font-weight:800; letter-spacing:-0.01em;}
+p{margin:0;}
+button{font-family:inherit;}
+a{color:inherit;}
+:focus-visible{outline:3px solid var(--focus); outline-offset:2px;}
+@media (prefers-contrast:more){
+  :root{--line:#1a1a1a;}
+  .card{border-width:2px !important;}
+}
+@media (prefers-reduced-motion:reduce){
+  *{animation-duration:0.001ms !important; transition-duration:0.001ms !important;}
+}
+
+/* ============ LAYOUT SHELL ============ */
+#app{min-height:100%;display:flex;flex-direction:column;}
+.topbar{
+  position:sticky; top:0; z-index:40; background:var(--teal-900); color:#fff;
+  padding:calc(10px + var(--sat-top)) 14px 10px; display:flex; align-items:center; gap:10px;
+}
+.topbar .brand{display:flex; align-items:baseline; gap:8px; flex:1; min-width:0;}
+.topbar .brand h1{font-size:20px; color:#fff;}
+.topbar .brand small{opacity:.8; font-size:11px; font-family:var(--font-latin);}
+.langswitch{display:flex; background:rgba(255,255,255,.12); border-radius:999px; padding:3px; gap:2px;}
+.langswitch button{border:0; background:transparent; color:#fff; padding:6px 10px; border-radius:999px; font-size:12px; font-weight:700; cursor:pointer;}
+.langswitch button[aria-pressed="true"]{background:#fff; color:var(--teal-900);}
+.modebtn{border:1px solid rgba(255,255,255,.4); background:rgba(255,255,255,.08); color:#fff; border-radius:999px; padding:7px 12px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;}
+
+main{flex:1; width:100%; max-width:1180px; margin:0 auto; padding:14px 14px 96px; display:flex; gap:20px;}
+.sidebar{display:none;}
+.content{flex:1; min-width:0; display:flex; flex-direction:column; gap:16px;}
+
+.bottomnav{
+  position:fixed; bottom:0; left:0; right:0; z-index:50; background:var(--paper-raised);
+  border-top:1px solid var(--line); display:flex; padding:6px calc(4px + var(--sat-bottom)/2) calc(6px + var(--sat-bottom));
+  box-shadow:0 -2px 10px rgba(0,0,0,.06);
+}
+.bottomnav button{flex:1; border:0; background:transparent; display:flex; flex-direction:column; align-items:center; gap:3px; padding:6px 2px; border-radius:12px; cursor:pointer; color:var(--ink-soft); font-size:11px; font-weight:700;}
+.bottomnav button .ic{font-size:20px;}
+.bottomnav button[aria-current="true"]{color:var(--teal-700); background:var(--teal-100);}
+
+.sosfab{
+  position:fixed; right:14px; bottom:calc(78px + var(--sat-bottom)); z-index:55;
+  width:64px; height:64px; border-radius:50%; border:0; cursor:pointer;
+  background:var(--high); color:#fff; font-weight:800; font-size:13px; box-shadow:0 6px 16px rgba(198,40,40,.45);
+}
+
+/* ============ CARDS / COMMON ============ */
+.card{background:var(--paper-raised); border:1px solid var(--line); border-radius:var(--radius-m); padding:16px;}
+.card h2{font-size:15px; color:var(--ink-soft); text-transform:none; margin-bottom:10px;}
+.row{display:flex; gap:10px; flex-wrap:wrap;}
+.pill{display:inline-flex; align-items:center; gap:6px; font-size:11px; font-weight:700; padding:4px 10px; border-radius:999px; background:var(--teal-100); color:var(--teal-700); font-family:var(--font-latin); letter-spacing:.02em;}
+.pill.demo{background:#FFF0D6; color:#8A5A00;}
+.pill.ok{background:var(--safe-bg); color:var(--safe);}
+.pill.bad{background:var(--high-bg); color:var(--high);}
+
+.status-card{border-radius:var(--radius-l); padding:20px; color:#fff; display:flex; flex-direction:column; gap:12px;}
+.status-card.level-normal{background:linear-gradient(135deg,var(--safe),#146342);}
+.status-card.level-caution{background:linear-gradient(135deg,#C79A1E,#8A6B00); color:#241C00;}
+.status-card.level-warning{background:linear-gradient(135deg,var(--warn),#8A3B06);}
+.status-card.level-high{background:linear-gradient(135deg,var(--high),#7A1414);}
+.status-card.level-critical{background:repeating-linear-gradient(135deg,var(--critical-bg),var(--critical-bg) 14px,#560606 14px,#560606 28px); color:var(--critical-fg); animation:pulseCrit 1.8s infinite;}
+@keyframes pulseCrit{0%,100%{box-shadow:0 0 0 0 rgba(122,12,12,.5);}50%{box-shadow:0 0 0 10px rgba(122,12,12,0);}}
+.status-top{display:flex; align-items:center; gap:12px;}
+.status-emoji{font-size:38px; line-height:1;}
+.status-title{font-size:22px; font-weight:800;}
+.status-sub{font-size:14px; opacity:.95;}
+
+.bigbtn-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.bigbtn{
+  display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
+  padding:16px 8px; min-height:88px; border-radius:var(--radius-m); border:1px solid var(--line);
+  background:var(--paper-raised); cursor:pointer; font-weight:700; font-size:13px; color:var(--ink); text-align:center;
+}
+.bigbtn .ic{font-size:26px;}
+.bigbtn.primary{background:var(--teal-700); color:#fff; border-color:var(--teal-700);}
+.bigbtn.danger{background:var(--high); color:#fff; border-color:var(--high);}
+.bigbtn.wide{grid-column:1/-1;}
+
+.barchart{display:flex; flex-direction:column; gap:10px;}
+.barrow .lbl{display:flex; justify-content:space-between; font-size:13px; font-weight:700; margin-bottom:4px;}
+.barrow .track{height:12px; border-radius:999px; background:var(--line); overflow:hidden;}
+.barrow .fill{height:100%; border-radius:999px; background:var(--teal-700); transition:width .6s ease;}
+.barrow .fill.high{background:var(--high);}
+.barrow .fill.med{background:var(--caution);}
+.barrow .fill.low{background:var(--safe);}
+
+.segmented{display:inline-flex; border:1px solid var(--line); border-radius:999px; padding:3px; background:var(--paper);}
+.segmented button{border:0; background:transparent; padding:7px 14px; border-radius:999px; font-weight:700; font-size:12px; cursor:pointer; color:var(--ink-soft);}
+.segmented button[aria-pressed="true"]{background:var(--teal-700); color:#fff;}
+
+.scenariobar{display:flex; gap:8px; overflow-x:auto; padding-bottom:2px; -webkit-overflow-scrolling:touch;}
+.scenariobar::-webkit-scrollbar{height:5px;}
+.scenariochip{flex:none; border:1px solid var(--line); background:var(--paper-raised); padding:8px 14px; border-radius:999px; font-size:12px; font-weight:700; cursor:pointer; white-space:nowrap;}
+.scenariochip[aria-pressed="true"]{background:var(--teal-900); color:#fff; border-color:var(--teal-900);}
+
+#map{width:100%; height:280px; border-radius:var(--radius-m); border:1px solid var(--line); z-index:0;}
+.maplegend{display:flex; flex-wrap:wrap; gap:8px; font-size:11px; font-weight:700; margin-top:8px;}
+.maplegend span{display:inline-flex; align-items:center; gap:4px;}
+.dot{width:10px; height:10px; border-radius:50%; display:inline-block;}
+
+.shelter-card{border:1px solid var(--line); border-radius:var(--radius-m); padding:14px; display:flex; flex-direction:column; gap:8px;}
+.shelter-head{display:flex; justify-content:space-between; align-items:flex-start; gap:8px;}
+.shelter-stats{display:grid; grid-template-columns:repeat(3,1fr); gap:8px; font-size:12px;}
+.shelter-stats div{background:var(--paper); border-radius:8px; padding:6px 8px; text-align:center;}
+.shelter-stats b{display:block; font-size:15px;}
+.shelter-tags{display:flex; gap:6px; flex-wrap:wrap; font-size:11px;}
+.tag{background:var(--teal-100); color:var(--teal-700); padding:3px 8px; border-radius:999px; font-weight:700;}
+.tag.off{background:#EFEFEF; color:#8A8A8A;}
+.shelter-actions{display:flex; gap:8px;}
+.btn-sm{flex:1; padding:9px; border-radius:10px; border:1px solid var(--line); background:var(--paper); font-weight:700; font-size:12px; cursor:pointer;}
+.btn-sm.primary{background:var(--teal-700); color:#fff; border-color:var(--teal-700);}
+
+.sos-need-grid{display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:12px 0;}
+.sos-need{border:2px solid var(--line); border-radius:var(--radius-m); padding:14px; text-align:center; font-weight:700; cursor:pointer; background:var(--paper-raised);}
+.sos-need[aria-pressed="true"]{border-color:var(--high); background:var(--high-bg); color:var(--high);}
+.sos-timeline{display:flex; flex-direction:column; gap:0;}
+.sos-step{display:flex; gap:12px; padding:10px 0; opacity:.4;}
+.sos-step.active{opacity:1;}
+.sos-step .node{width:26px; height:26px; border-radius:50%; background:var(--line); display:flex; align-items:center; justify-content:center; font-size:13px; flex:none;}
+.sos-step.active .node{background:var(--teal-700); color:#fff;}
+.sos-step.done .node{background:var(--safe); color:#fff;}
+.sos-step .txt b{display:block; font-size:13px;}
+.sos-step .txt span{font-size:12px; color:var(--ink-soft);}
+
+.status-table{width:100%; border-collapse:collapse; font-size:13px;}
+.status-table td{padding:9px 4px; border-bottom:1px solid var(--line);}
+.status-table td:last-child{text-align:right;}
+
+.gsmbox{background:var(--ink); color:#B7F7C8; font-family:monospace; padding:12px; border-radius:10px; font-size:12.5px; white-space:pre-wrap; word-break:break-all;}
+
+.timeline-track{display:flex; gap:6px; overflow-x:auto; padding:8px 0;}
+.timeline-node{flex:none; text-align:center; min-width:74px; font-size:11px; font-weight:700; color:var(--ink-soft);}
+.timeline-node .dot2{width:12px; height:12px; border-radius:50%; background:var(--line); margin:0 auto 4px;}
+.timeline-node.active{color:var(--teal-700);}
+.timeline-node.active .dot2{background:var(--teal-700);}
+.timeline-node.done .dot2{background:var(--safe);}
+
+.officer-grid{display:grid; grid-template-columns:1fr; gap:14px;}
+.incident-row{display:flex; justify-content:space-between; align-items:center; padding:10px 0; border-bottom:1px solid var(--line); font-size:13px;}
+
+.banner{border-radius:var(--radius-m); padding:12px 14px; font-size:13px; font-weight:700; display:flex; gap:8px; align-items:center;}
+.banner.offline{background:#3A2E00; color:#FFE49E;}
+.banner.info{background:var(--teal-100); color:var(--teal-700);}
+
+.formgrid{display:grid; grid-template-columns:1fr 1fr; gap:10px;}
+.report-opt{border:1px solid var(--line); border-radius:12px; padding:12px; text-align:center; font-weight:700; font-size:13px; cursor:pointer; background:var(--paper-raised);}
+.report-opt[aria-pressed="true"]{background:var(--teal-100); border-color:var(--teal-700); color:var(--teal-700);}
+
+.voicebar{position:sticky; bottom:0; z-index:20;}
+.small{font-size:12px; color:var(--ink-soft);}
+.hidden{display:none !important;}
+.screen{display:flex; flex-direction:column; gap:16px;}
+.slider{width:100%;}
+
+/* ============ MOBILE FIRST BASE RULES ARE ABOVE. TABLET / DESKTOP OVERRIDES BELOW ============ */
+@media (max-width:480px){
+  .bigbtn-grid{grid-template-columns:1fr 1fr;}
+  .status-title{font-size:19px;}
+}
+@media (max-width:600px){
+  main{padding-bottom:100px;}
+}
+@media (min-width:601px) and (max-width:1024px){
+  .bigbtn-grid{grid-template-columns:repeat(3,1fr);}
+  .shelter-stats{grid-template-columns:repeat(3,1fr);}
+}
+@media (min-width:1025px){
+  .bottomnav,.sosfab{display:none;}
+  main{padding:24px 24px 40px; gap:26px;}
+  .sidebar{
+    display:flex; flex-direction:column; gap:4px; width:230px; flex:none;
+    position:sticky; top:calc(64px + var(--sat-top)); align-self:flex-start;
+    background:var(--paper-raised); border:1px solid var(--line); border-radius:var(--radius-m); padding:10px;
+  }
+  .sidebar button{display:flex; align-items:center; gap:10px; border:0; background:transparent; padding:11px 12px; border-radius:10px; font-weight:700; font-size:13.5px; cursor:pointer; color:var(--ink-soft); text-align:left;}
+  .sidebar button[aria-current="true"]{background:var(--teal-100); color:var(--teal-700);}
+  .bigbtn-grid{grid-template-columns:repeat(4,1fr);}
+  #map{height:420px;}
+  .officer-grid{grid-template-columns:1.3fr 1fr;}
+}
+@media (orientation:landscape) and (max-width:900px){
+  .bottomnav button .ic{font-size:16px;}
+}
+</style>
+</head>
+<body data-lang="ta">
+<div id="app">
+  <header class="topbar">
+    <div class="brand">
+      <h1 id="brandTitle">நீர் காவல்</h1>
+      <small>NEERKAVAL</small>
+    </div>
+    <button class="modebtn" id="modeToggle" type="button"></button>
+    <div class="langswitch" role="group" aria-label="Language">
+      <button data-lang="ta" aria-pressed="true">தமிழ்</button>
+      <button data-lang="en" aria-pressed="false">EN</button>
+      <button data-lang="hi" aria-pressed="false">हिं</button>
+    </div>
+  </header>
+
+  <main>
+    <nav class="sidebar" id="sidebarNav" aria-label="Main"></nav>
+    <div class="content" id="content"></div>
+  </main>
+
+  <nav class="bottomnav" id="bottomNav" aria-label="Main"></nav>
+  <button class="sosfab" id="sosFab" type="button">🆘</button>
+</div>
+
+<script>
+/* =========================================================================
+   NEERKAVAL — frontend-only flood safety SIMULATION MODEL.
+   No real backend, no real SMS/WhatsApp/GSM, no real dispatch.
+   Every data source below is DEMO / SIMULATED, clearly labelled in the UI.
+   ========================================================================= */
+
+/* ---------------- i18n ---------------- */
+const I18N = {
+ta:{
+ brand:"நீர் காவல்", tagline:"வெள்ள அபாய பாதுகாப்பு",
+ nav_home:"முகப்பு", nav_map:"வரைபடம்", nav_risk:"அபாயம்", nav_shelter:"மையம்", nav_sos:"SOS",
+ nav_weather:"வானிலை", nav_alerts:"எச்சரிக்கை", nav_offline:"ஆஃப்லைன்", nav_report:"புகார்",
+ mode_public:"பொது பயனர்", mode_officer:"அதிகாரி பயன்முறை", switch_to_officer:"👮 அதிகாரி பயன்முறை", switch_to_public:"🙋 பொது பயனர்",
+ whatdo:"இப்போது என்ன செய்ய வேண்டும்?",
+ btn_safety:"பாதுகாப்பான இடத்திற்குச் செல்லுங்கள்", btn_shelter:"அருகிலுள்ள பாதுகாப்பு மையம்",
+ btn_route:"பாதுகாப்பான வழி", btn_sos:"அவசர உதவி", btn_listen:"கேட்டு தெரிந்து கொள்ளுங்கள்",
+ btn_report:"வெள்ளம் தெரிவிக்க",
+ currentarea:"தற்போதைய இடம்", weather_title:"வானிலை", risk_title:"வெள்ள அபாயம்", why:"ஏன்?",
+ simple_mode:"எளிய முறை", detailed_mode:"விரிவான முறை",
+ rain:"மழை", temp:"வெப்பநிலை", wind:"காற்று", humidity:"ஈரப்பதம்", forecast:"முன்னறிவிப்பு", lastupdate:"கடைசி புதுப்பிப்பு",
+ riskscore:"அபாய மதிப்பெண்", why_rain:"கனமழை", why_water:"தண்ணீர் உயர்வு", why_elev:"தாழ்வான நிலம்",
+ why_soil:"மண் ஈரப்பதம்", why_road:"சாலை தடை",
+ map_title:"வரைபடம்", legend_safe:"பாதுகாப்பு", legend_caution:"எச்சரிக்கை", legend_warn:"ஆபத்து",
+ legend_flood:"வெள்ளம்", legend_critical:"கடுமையான ஆபத்து", legend_shelter:"மையம்", legend_blocked:"தடுக்கப்பட்ட சாலை", legend_route:"பாதுகாப்பான வழி",
+ shelter_title:"பாதுகாப்பு மையங்கள்", distance:"தொலைவு", capacity:"கொள்ளளவு", occupied:"நிரம்பியது", available:"இடம் உள்ளது",
+ medical:"மருத்துவம்", food:"உணவு", water:"தண்ணீர்", access:"அணுகல்",
+ go_shelter:"செல்லுங்கள்", show_route:"வழி காட்டு", hear_details:"கேளுங்கள்",
+ shelter_full_warn:"இடங்கள் மிகக் குறைவு", shelter_unavailable:"சரிபார்க்கப்பட்ட மைய தகவல் இல்லை",
+ sos_title:"அவசர உதவி", sos_whatneed:"உங்களுக்கு என்ன தேவை?",
+ need_boat:"படகு", need_medical:"மருத்துவம்", need_trapped:"மக்கள் சிக்கியுள்ளனர்", need_road:"சாலை தடை", need_shelterhelp:"மைய உதவி",
+ send_sos:"SOS அனுப்பு", location_avail:"இடம்", gps_avail:"ஜிபிஎஸ்", internet_avail:"இணையம்",
+ sos_a:"SOS: அனுப்பப்படவில்லை", sos_b:"SOS கோரிக்கை உருவாக்கப்பட்டது", sos_c:"பரிமாற்றம் நடைபெறுகிறது",
+ sos_d:"பதிலுக்காக காத்திருக்கிறது", sos_e:"உறுதிசெய்யப்பட்டது", sos_f:"மீட்பு குழு நியமிக்கப்பட்டது",
+ alerts_title:"எச்சரிக்கை மையம்", sms:"எஸ்எம்எஸ்", whatsapp:"வாட்ஸ்அப்", gsm:"ஜிஎஸ்எம்", emg_alert:"அவசர எச்சரிக்கை",
+ ready_config:"கட்டமைப்புக்கு தயார்", demo_mode:"டெமோ முறை", simulated:"சிமுலேஷன்",
+ offline_title:"ஆஃப்லைன் பாதுகாப்பு முறை", simulate_off:"இணையத்தை நிறுத்து", simulate_on:"இணையத்தை இயக்கு",
+ cache_radius:"பாதுகாப்பு ஆரம்", cache_ready:"கேச் தயார்",
+ report_title:"வெள்ளத்தை தெரிவிக்கவும்", rep_flooded:"சாலை வெள்ளம்", rep_bridge:"பாலம் ஆபத்து", rep_trapped:"மக்கள் சிக்கியுள்ளனர்",
+ rep_blocked:"சாலை தடை", rep_rising:"தண்ணீர் உயர்வு", rep_other:"மற்றவை", submit_report:"அனுப்பு", report_created:"புகார் பதிவு செய்யப்பட்டது",
+ scenario_ctrl:"காட்சி தேர்வு", officer_dash:"அதிகாரி கண்காணிப்பு", incidents:"நிகழ்வுகள்", rescue_teams:"மீட்பு குழுக்கள்", system_status:"கணினி நிலை",
+ demo_label:"டெமோ தரவு", listen:"கேளுங்கள்", pause:"நிறுத்து", resume:"தொடரவும்", repeat:"மீண்டும்",
+ gpsdenied_title:"இட அனுமதி இல்லை", select_manual:"கைமுறையாக இடத்தை தேர்வு செய்யவும்",
+ last_sync:"கடைசி ஒத்திசைவு",
+ status_normal:"சாதாரணம்", status_caution:"எச்சரிக்கை", status_warning:"ஆபத்து எச்சரிக்கை", status_high:"அதிக ஆபத்து", status_critical:"கடுமையான வெள்ள ஆபத்து",
+},
+en:{
+ brand:"NEERKAVAL", tagline:"Flood Safety Assistant",
+ nav_home:"Home", nav_map:"Map", nav_risk:"Risk", nav_shelter:"Shelter", nav_sos:"SOS",
+ nav_weather:"Weather", nav_alerts:"Alerts", nav_offline:"Offline", nav_report:"Report",
+ mode_public:"Public user", mode_officer:"Officer mode", switch_to_officer:"👮 Officer mode", switch_to_public:"🙋 Public user",
+ whatdo:"What should I do now?",
+ btn_safety:"Go to safety", btn_shelter:"Nearest shelter",
+ btn_route:"Safe route", btn_sos:"Emergency SOS", btn_listen:"Listen to instructions",
+ btn_report:"Report flood",
+ currentarea:"Current area", weather_title:"Weather", risk_title:"Flood risk", why:"Why?",
+ simple_mode:"Simple mode", detailed_mode:"Detailed mode",
+ rain:"Rain", temp:"Temperature", wind:"Wind", humidity:"Humidity", forecast:"Forecast", lastupdate:"Last updated",
+ riskscore:"Risk score", why_rain:"Heavy rainfall", why_water:"Rising water", why_elev:"Low elevation",
+ why_soil:"Soil saturation", why_road:"Road blockage",
+ map_title:"Map", legend_safe:"Safe", legend_caution:"Caution", legend_warn:"Warning",
+ legend_flood:"Flooded", legend_critical:"Critical", legend_shelter:"Shelter", legend_blocked:"Blocked road", legend_route:"Safe route",
+ shelter_title:"Shelters", distance:"Distance", capacity:"Capacity", occupied:"Occupied", available:"Available",
+ medical:"Medical", food:"Food", water:"Water", access:"Accessible",
+ go_shelter:"Go to shelter", show_route:"Show route", hear_details:"Hear details",
+ shelter_full_warn:"Very few places left", shelter_unavailable:"Verified shelter information unavailable",
+ sos_title:"Emergency SOS", sos_whatneed:"What do you need?",
+ need_boat:"Boat", need_medical:"Medical", need_trapped:"People trapped", need_road:"Road blocked", need_shelterhelp:"Shelter help",
+ send_sos:"Send SOS", location_avail:"Location", gps_avail:"GPS", internet_avail:"Internet",
+ sos_a:"SOS: not sent", sos_b:"SOS request created", sos_c:"Simulated transmission",
+ sos_d:"Waiting for acknowledgement", sos_e:"Dispatch acknowledged", sos_f:"Rescue team assigned",
+ alerts_title:"Alert center", sms:"SMS", whatsapp:"WhatsApp", gsm:"GSM", emg_alert:"Emergency alert",
+ ready_config:"Ready for provider configuration", demo_mode:"Demo mode", simulated:"Simulated",
+ offline_title:"Offline safety mode", simulate_off:"Simulate internet off", simulate_on:"Turn internet on",
+ cache_radius:"Safety radius", cache_ready:"Cache ready",
+ report_title:"Report flood", rep_flooded:"Flooded road", rep_bridge:"Bridge unsafe", rep_trapped:"People trapped",
+ rep_blocked:"Road blocked", rep_rising:"Water rising", rep_other:"Other", submit_report:"Submit", report_created:"Report created",
+ scenario_ctrl:"Scenario simulator", officer_dash:"Officer dashboard", incidents:"Active incidents", rescue_teams:"Rescue teams", system_status:"System status",
+ demo_label:"Demo data", listen:"Listen", pause:"Pause", resume:"Resume", repeat:"Repeat",
+ gpsdenied_title:"Location permission denied", select_manual:"Select location manually",
+ last_sync:"Last sync",
+ status_normal:"Normal", status_caution:"Caution", status_warning:"Warning", status_high:"High risk", status_critical:"Critical flood risk",
+},
+hi:{
+ brand:"नीर काव़ल", tagline:"बाढ़ सुरक्षा सहायक",
+ nav_home:"होम", nav_map:"नक्शा", nav_risk:"जोखिम", nav_shelter:"आश्रय", nav_sos:"SOS",
+ nav_weather:"मौसम", nav_alerts:"चेतावनी", nav_offline:"ऑफ़लाइन", nav_report:"रिपोर्ट",
+ mode_public:"आम उपयोगकर्ता", mode_officer:"अधिकारी मोड", switch_to_officer:"👮 अधिकारी मोड", switch_to_public:"🙋 आम उपयोगकर्ता",
+ whatdo:"अभी क्या करना चाहिए?",
+ btn_safety:"सुरक्षित स्थान जाएँ", btn_shelter:"नज़दीकी आश्रय",
+ btn_route:"सुरक्षित रास्ता", btn_sos:"आपातकालीन सहायता", btn_listen:"सुनकर जानें",
+ btn_report:"बाढ़ की सूचना दें",
+ currentarea:"वर्तमान क्षेत्र", weather_title:"मौसम", risk_title:"बाढ़ जोखिम", why:"क्यों?",
+ simple_mode:"सरल मोड", detailed_mode:"विस्तृत मोड",
+ rain:"बारिश", temp:"तापमान", wind:"हवा", humidity:"नमी", forecast:"पूर्वानुमान", lastupdate:"अंतिम अपडेट",
+ riskscore:"जोखिम अंक", why_rain:"भारी बारिश", why_water:"जल स्तर बढ़ना", why_elev:"निचला क्षेत्र",
+ why_soil:"मिट्टी की नमी", why_road:"सड़क अवरोध",
+ map_title:"नक्शा", legend_safe:"सुरक्षित", legend_caution:"सावधानी", legend_warn:"चेतावनी",
+ legend_flood:"बाढ़ग्रस्त", legend_critical:"अति गंभीर", legend_shelter:"आश्रय", legend_blocked:"अवरुद्ध सड़क", legend_route:"सुरक्षित रास्ता",
+ shelter_title:"आश्रय केंद्र", distance:"दूरी", capacity:"क्षमता", occupied:"भरा हुआ", available:"उपलब्ध",
+ medical:"चिकित्सा", food:"भोजन", water:"पानी", access:"सुगम्य",
+ go_shelter:"आश्रय जाएँ", show_route:"रास्ता दिखाएँ", hear_details:"सुनें",
+ shelter_full_warn:"बहुत कम जगह बची है", shelter_unavailable:"सत्यापित आश्रय जानकारी उपलब्ध नहीं",
+ sos_title:"आपातकालीन SOS", sos_whatneed:"आपको क्या चाहिए?",
+ need_boat:"नाव", need_medical:"चिकित्सा", need_trapped:"लोग फंसे हैं", need_road:"सड़क अवरुद्ध", need_shelterhelp:"आश्रय सहायता",
+ send_sos:"SOS भेजें", location_avail:"स्थान", gps_avail:"जीपीएस", internet_avail:"इंटरनेट",
+ sos_a:"SOS: नहीं भेजा गया", sos_b:"SOS अनुरोध बनाया गया", sos_c:"सिम्युलेटेड प्रसारण",
+ sos_d:"पुष्टि की प्रतीक्षा", sos_e:"पुष्टि हो गई", sos_f:"बचाव दल नियुक्त",
+ alerts_title:"चेतावनी केंद्र", sms:"एसएमएस", whatsapp:"व्हाट्सऐप", gsm:"जीएसएम", emg_alert:"आपातकालीन चेतावनी",
+ ready_config:"कॉन्फ़िगरेशन के लिए तैयार", demo_mode:"डेमो मोड", simulated:"सिम्युलेटेड",
+ offline_title:"ऑफ़लाइन सुरक्षा मोड", simulate_off:"इंटरनेट बंद करें", simulate_on:"इंटरनेट चालू करें",
+ cache_radius:"सुरक्षा त्रिज्या", cache_ready:"कैश तैयार",
+ report_title:"बाढ़ की सूचना दें", rep_flooded:"सड़क जलमग्न", rep_bridge:"पुल असुरक्षित", rep_trapped:"लोग फंसे हैं",
+ rep_blocked:"सड़क अवरुद्ध", rep_rising:"जल स्तर बढ़ रहा", rep_other:"अन्य", submit_report:"भेजें", report_created:"रिपोर्ट दर्ज हुई",
+ scenario_ctrl:"परिदृश्य सिम्युलेटर", officer_dash:"अधिकारी डैशबोर्ड", incidents:"सक्रिय घटनाएँ", rescue_teams:"बचाव दल", system_status:"सिस्टम स्थिति",
+ demo_label:"डेमो डेटा", listen:"सुनें", pause:"रोकें", resume:"जारी रखें", repeat:"दोहराएँ",
+ gpsdenied_title:"स्थान अनुमति अस्वीकृत", select_manual:"स्थान मैन्युअल रूप से चुनें",
+ last_sync:"अंतिम सिंक",
+ status_normal:"सामान्य", status_caution:"सावधानी", status_warning:"चेतावनी", status_high:"उच्च जोखिम", status_critical:"अति गंभीर बाढ़ जोखिम",
+}
+};
+const SPEECH_LANG = {ta:'ta-IN', en:'en-IN', hi:'hi-IN'};
+
+/* ---------------- Scenario data (SIMULATION) ---------------- */
+const SCENARIOS = {
+normal:{ name:{ta:"சாதாரணம்",en:"Normal",hi:"सामान्य"}, area:{ta:"தமிழ்நாடு கிராமம்",en:"Tamil Nadu village",hi:"तमिलनाडु गाँव"},
+  center:[11.05,78.35], risk:"normal", score:12,
+  weather:{rain:6,wind:9,humidity:60,forecast:{ta:"இலேசான மழை",en:"Light rain expected",hi:"हल्की बारिश की संभावना"}},
+  factors:{rain:15,water:10,elev:20,soil:20,road:5},
+  roads:[{from:[11.05,78.35],to:[11.06,78.37],blocked:false}],
+  shelters:[{name:{ta:"அரசு பள்ளி மையம்",en:"Government School Shelter",hi:"सरकारी स्कूल आश्रय"},dist:1.8,cap:100,occ:20,med:true,food:true,water:true,access:true,pos:[11.058,78.362]}],
+  zones:[{pos:[11.05,78.35],r:900,type:"safe"}],
+  internet:true, gps:true, sms:true, whatsapp:true,
+  needAlert:false,
+},
+tribal:{ name:{ta:"மலைவாழ் பழங்குடி கிராமம்",en:"Tribal Hill Village",hi:"आदिवासी पहाड़ी गाँव"}, area:{ta:"கொல்லி மலை பழங்குடி குடியிருப்பு",en:"Kolli Hills tribal settlement",hi:"कोल्ली पहाड़ी आदिवासी बस्ती"},
+  center:[11.25,78.33], risk:"warning", score:58,
+  weather:{rain:64,wind:18,humidity:88,forecast:{ta:"கனமழை தொடரும்",en:"Heavy rain continuing",hi:"भारी बारिश जारी"}},
+  factors:{rain:80,water:60,elev:35,soil:70,road:65},
+  roads:[{from:[11.25,78.33],to:[11.24,78.31],blocked:true},{from:[11.25,78.33],to:[11.262,78.345],blocked:false}],
+  shelters:[{name:{ta:"மலை உச்சி பாதுகாப்பு மையம்",en:"Hilltop Community Shelter",hi:"पहाड़ी सामुदायिक आश्रय"},dist:2.4,cap:60,occ:18,med:true,food:true,water:true,access:false,pos:[11.262,78.345]}],
+  zones:[{pos:[11.243,78.312],r:500,type:"flood"},{pos:[11.262,78.345],r:600,type:"safe"}],
+  internet:true, gps:true, sms:true, whatsapp:true, needAlert:false,
+},
+riverbank:{ name:{ta:"ஆற்றங்கரை கிராமம்",en:"Riverbank Village",hi:"नदी तट गाँव"}, area:{ta:"காவிரி ஆற்றங்கரை ஊர்",en:"Cauvery riverbank hamlet",hi:"कावेरी नदी तट गाँव"},
+  center:[10.9,78.6], risk:"warning", score:55,
+  weather:{rain:58,wind:14,humidity:82,forecast:{ta:"நதி நீர் மட்டம் உயரும்",en:"River level rising",hi:"नदी का जलस्तर बढ़ेगा"}},
+  factors:{rain:60,water:85,elev:40,soil:55,road:50},
+  roads:[{from:[10.9,78.6],to:[10.905,78.615],blocked:true},{from:[10.9,78.6],to:[10.895,78.59],blocked:false}],
+  shelters:[{name:{ta:"ஊராட்சி அலுவலக மையம்",en:"Panchayat Office Shelter",hi:"पंचायत कार्यालय आश्रय"},dist:1.2,cap:80,occ:30,med:false,food:true,water:true,access:true,pos:[10.895,78.59]}],
+  zones:[{pos:[10.905,78.615],r:700,type:"flood"},{pos:[10.895,78.59],r:500,type:"safe"}],
+  internet:true, gps:true, sms:true, whatsapp:true, needAlert:false,
+},
+urban:{ name:{ta:"நகர்ப்புற வெள்ளம்",en:"Urban Flood",hi:"शहरी बाढ़"}, area:{ta:"சென்னை புறநகர் பகுதி",en:"Chennai suburb ward",hi:"चेन्नई उपनगर वार्ड"},
+  center:[13.05,80.21], risk:"high", score:71,
+  weather:{rain:86,wind:24,humidity:90,forecast:{ta:"கனமழை தொடரும்",en:"Heavy rain expected",hi:"भारी बारिश की उम्मीद"}},
+  factors:{rain:85,water:70,elev:50,soil:40,road:80},
+  roads:[{from:[13.05,80.21],to:[13.048,80.222],blocked:true},{from:[13.05,80.21],to:[13.06,80.2],blocked:true},{from:[13.05,80.21],to:[13.041,80.205],blocked:false}],
+  shelters:[
+    {name:{ta:"நகராட்சி பள்ளி மையம் 1",en:"Municipal School Shelter 1",hi:"नगरपालिका स्कूल आश्रय 1"},dist:1.1,cap:150,occ:140,med:true,food:true,water:true,access:true,pos:[13.041,80.205]},
+    {name:{ta:"சமூக மண்டப மையம்",en:"Community Hall Shelter",hi:"सामुदायिक भवन आश्रय"},dist:2.6,cap:200,occ:60,med:true,food:true,water:true,access:true,pos:[13.06,80.19]}
+  ],
+  zones:[{pos:[13.048,80.222],r:800,type:"flood"},{pos:[13.06,80.2],r:600,type:"warn"},{pos:[13.041,80.205],r:500,type:"safe"}],
+  internet:true, gps:true, sms:true, whatsapp:true, needAlert:true,
+},
+coastal:{ name:{ta:"கடலோர வெள்ளம்",en:"Coastal Flood",hi:"तटीय बाढ़"}, area:{ta:"நாகப்பட்டினம் கடலோர ஊர்",en:"Nagapattinam coastal hamlet",hi:"नागापट्टिनम तटीय गाँव"},
+  center:[10.76,79.85], risk:"high", score:74,
+  weather:{rain:70,wind:46,humidity:92,forecast:{ta:"பலத்த காற்றுடன் கடல் நீர் ஏறும்",en:"Strong wind, sea water intrusion",hi:"तेज़ हवा, समुद्री जल प्रवेश"}},
+  factors:{rain:65,water:80,elev:15,soil:50,road:45},
+  roads:[{from:[10.76,79.85],to:[10.758,79.858],blocked:false}],
+  shelters:[{name:{ta:"உயர் நிலப் பள்ளி மையம்",en:"Higher-Ground School Shelter",hi:"ऊँची ज़मीन स्कूल आश्रय"},dist:3.0,cap:120,occ:40,med:true,food:true,water:true,access:true,pos:[10.752,79.845]}],
+  zones:[{pos:[10.763,79.858],r:900,type:"flood"},{pos:[10.752,79.845],r:600,type:"safe"}],
+  internet:true, gps:true, sms:true, whatsapp:true, needAlert:true,
+},
+landslide:{ name:{ta:"மலைச்சரிவு பகுதி",en:"Hilly / Landslide Area",hi:"पहाड़ी/भूस्खलन क्षेत्र"}, area:{ta:"நீலகிரி மலைப்பகுதி ஊர்",en:"Nilgiris hill-slope hamlet",hi:"नीलगिरि पहाड़ी गाँव"},
+  center:[11.4,76.7], risk:"high", score:76,
+  weather:{rain:92,wind:20,humidity:94,forecast:{ta:"தீவிர மழை, மண் சரிவு அபாயம்",en:"Intense rain, landslide risk",hi:"तीव्र बारिश, भूस्खलन जोखिम"}},
+  factors:{rain:90,water:55,elev:30,soil:88,road:70},
+  roads:[{from:[11.4,76.7],to:[11.41,76.71],blocked:true},{from:[11.4,76.7],to:[11.395,76.685],blocked:false}],
+  shelters:[{name:{ta:"தாழ்வார பாதுகாப்பு மையம்",en:"Valley-side Shelter",hi:"घाटी किनारे आश्रय"},dist:2.1,cap:70,occ:25,med:true,food:true,water:false,access:false,pos:[11.395,76.685]}],
+  zones:[{pos:[11.41,76.71],r:600,type:"critical"},{pos:[11.395,76.685],r:500,type:"safe"}],
+  internet:true, gps:true, sms:true, whatsapp:true, needAlert:true,
+},
+night:{ name:{ta:"இரவு நேர வெள்ளம்",en:"Night-time Flood",hi:"रात्रिकालीन बाढ़"}, area:{ta:"கிராம சாலை பகுதி",en:"Village roadside area",hi:"ग्रामीण सड़क क्षेत्र"},
+  center:[11.05,78.35], risk:"high", score:69,
+  weather:{rain:78,wind:16,humidity:91,forecast:{ta:"மின்சாரம் தடை, குறைந்த தெரிவுநிலை",en:"Power failure, low visibility",hi:"बिजली गुल, कम दृश्यता"}},
+  factors:{rain:75,water:65,elev:35,soil:60,road:60},
+  roads:[{from:[11.05,78.35],to:[11.06,78.37],blocked:true}],
+  shelters:[{name:{ta:"அவசர இரவு மையம்",en:"Emergency Night Shelter",hi:"आपातकालीन रात्रि आश्रय"},dist:1.5,cap:90,occ:35,med:true,food:true,water:true,access:true,pos:[11.043,78.34]}],
+  zones:[{pos:[11.06,78.37],r:700,type:"flood"},{pos:[11.043,78.34],r:500,type:"safe"}],
+  internet:true, gps:true, sms:true, whatsapp:true, needAlert:true, powerFail:true,
+},
+offline:{ name:{ta:"இணையம் இல்லாத நிலை",en:"Internet Offline",hi:"इंटरनेट ऑफ़लाइन"}, area:{ta:"தமிழ்நாடு கிராமம்",en:"Tamil Nadu village",hi:"तमिलनाडु गाँव"},
+  center:[11.05,78.35], risk:"warning", score:52,
+  weather:{rain:55,wind:12,humidity:80,forecast:{ta:"கடைசி ஒத்திசைவு தரவு",en:"Last synced data",hi:"अंतिम सिंक डेटा"}},
+  factors:{rain:60,water:50,elev:35,soil:55,road:40},
+  roads:[{from:[11.05,78.35],to:[11.06,78.37],blocked:true}],
+  shelters:[{name:{ta:"கேச் செய்யப்பட்ட மையம்",en:"Cached Shelter",hi:"कैश्ड आश्रय"},dist:1.8,cap:100,occ:40,med:true,food:true,water:true,access:true,pos:[11.043,78.34]}],
+  zones:[{pos:[11.06,78.37],r:600,type:"warn"},{pos:[11.043,78.34],r:500,type:"safe"}],
+  internet:false, gps:true, sms:false, whatsapp:false, needAlert:false,
+},
+critical:{ name:{ta:"கடுமையான வெள்ளம்",en:"Critical Flood",hi:"अति गंभीर बाढ़"}, area:{ta:"நகர்ப்புற பகுதி",en:"Urban ward",hi:"शहरी वार्ड"},
+  center:[13.05,80.21], risk:"critical", score:94,
+  weather:{rain:110,wind:38,humidity:97,forecast:{ta:"தொடர் கனமழை, உடனடி வெளியேற்றம்",en:"Continuous heavy rain, immediate evacuation",hi:"लगातार भारी बारिश, तुरंत निकासी"}},
+  factors:{rain:98,water:95,elev:55,soil:80,road:95},
+  roads:[{from:[13.05,80.21],to:[13.048,80.222],blocked:true},{from:[13.05,80.21],to:[13.06,80.2],blocked:true},{from:[13.05,80.21],to:[13.041,80.205],blocked:false}],
+  shelters:[{name:{ta:"அவசர வெளியேற்ற மையம்",en:"Emergency Evacuation Shelter",hi:"आपातकालीन निकासी आश्रय"},dist:1.1,cap:150,occ:148,med:true,food:true,water:true,access:true,pos:[13.041,80.205]}],
+  zones:[{pos:[13.048,80.222],r:900,type:"critical"},{pos:[13.06,80.2],r:700,type:"flood"},{pos:[13.041,80.205],r:500,type:"safe"}],
+  internet:true, gps:true, sms:true, whatsapp:true, needAlert:true,
+},
+sheltfull:{ name:{ta:"மையம் நிரம்பியுள்ளது",en:"Shelter Near Capacity",hi:"आश्रय लगभग भरा"}, area:{ta:"நகர்ப்புற பகுதி",en:"Urban ward",hi:"शहरी वार्ड"},
+  center:[13.05,80.21], risk:"high", score:70,
+  weather:{rain:80,wind:22,humidity:89,forecast:{ta:"கனமழை தொடரும்",en:"Heavy rain continuing",hi:"भारी बारिश जारी"}},
+  factors:{rain:80,water:65,elev:50,soil:45,road:70},
+  roads:[{from:[13.05,80.21],to:[13.048,80.222],blocked:true}],
+  shelters:[
+    {name:{ta:"நகராட்சி பள்ளி மையம் 1",en:"Municipal School Shelter 1",hi:"नगरपालिका स्कूल आश्रय 1"},dist:1.1,cap:100,occ:92,med:true,food:true,water:true,access:true,pos:[13.041,80.205]},
+    {name:{ta:"சமூக மண்டப மையம்",en:"Community Hall Shelter",hi:"सामुदायिक भवन आश्रय"},dist:2.6,cap:200,occ:60,med:true,food:true,water:true,access:true,pos:[13.06,80.19]}
+  ],
+  zones:[{pos:[13.048,80.222],r:800,type:"flood"},{pos:[13.041,80.205],r:500,type:"safe"}],
+  internet:true, gps:true, sms:true, whatsapp:true, needAlert:false,
+},
+noshelter:{ name:{ta:"மைய தகவல் இல்லை",en:"No Verified Shelter",hi:"सत्यापित आश्रय नहीं"}, area:{ta:"தொலைதூர கிராமம்",en:"Remote hamlet",hi:"दूरस्थ गाँव"},
+  center:[11.6,77.9], risk:"warning", score:48,
+  weather:{rain:50,wind:11,humidity:78,forecast:{ta:"தொடர்ச்சியான மழை",en:"Continuing rain",hi:"जारी बारिश"}},
+  factors:{rain:50,water:45,elev:40,soil:50,road:35},
+  roads:[{from:[11.6,77.9],to:[11.605,77.912],blocked:false}],
+  shelters:[],
+  zones:[{pos:[11.605,77.912],r:500,type:"warn"}],
+  internet:true, gps:true, sms:true, whatsapp:true, needAlert:false,
+},
+};
+const SCENARIO_ORDER=["normal","tribal","riverbank","urban","coastal","landslide","night","offline","critical","sheltfull","noshelter"];
+
+/* ---------------- Officer-side simulated data ---------------- */
+const RESCUE_TEAMS=[
+ {id:"Rescue Boat 01",status:"AVAILABLE",dist:3.2},
+ {id:"Rescue Boat 02",status:"MOVING",dist:5.1},
+ {id:"Rescue Van 01",status:"ASSIGNED",dist:1.4},
+ {id:"Rescue Boat 03",status:"OFFLINE",dist:8.0},
+];
+
+/* ---------------- State ---------------- */
+const STATE={
+ lang:"ta", officer:false, screen:"home",
+ scenarioKey:"tribal", detailMode:false,
+ sos:{step:0, need:null, acknowledged:false},
+ internetOverride:null, cacheRadius:10,
+ reportOpt:null, reportSubmitted:false,
+ gsmSimulated:false,
+ map:null, layerGroup:null,
+ speaking:false,
+};
+function T(k){return I18N[STATE.lang][k]||k;}
+function scen(){return SCENARIOS[STATE.scenarioKey];}
+function isOnline(){return STATE.internetOverride!==null?STATE.internetOverride:scen().internet;}
+function riskLabel(r){return {normal:T("status_normal"),caution:T("status_caution"),warning:T("status_warning"),high:T("status_high"),critical:T("status_critical")}[r];}
+function riskEmoji(r){return {normal:"🟢",caution:"🟡",warning:"🟠",high:"🔴",critical:"🛑"}[r];}
+
+/* ---------------- Nav config ---------------- */
+const NAV=[
+ {id:"home",ic:"🏠",labelKey:"nav_home"},
+ {id:"map",ic:"🗺️",labelKey:"nav_map"},
+ {id:"risk",ic:"⚠️",labelKey:"nav_risk"},
+ {id:"shelter",ic:"🏘️",labelKey:"nav_shelter"},
+ {id:"sos",ic:"🆘",labelKey:"nav_sos"},
+];
+const NAV_MORE=[
+ {id:"weather",ic:"🌦️",labelKey:"nav_weather"},
+ {id:"alerts",ic:"📢",labelKey:"nav_alerts"},
+ {id:"offline",ic:"📴",labelKey:"nav_offline"},
+ {id:"report",ic:"📝",labelKey:"nav_report"},
+];
+const OFFICER_NAV=[
+ {id:"officer",ic:"👮",labelKey:"officer_dash"},
+ {id:"map",ic:"🗺️",labelKey:"nav_map"},
+ {id:"risk",ic:"⚠️",labelKey:"nav_risk"},
+ {id:"alerts",ic:"📢",labelKey:"nav_alerts"},
+];
+
+/* ---------------- Render: shell (nav, lang) ---------------- */
+function renderShell(){
+  document.body.setAttribute('data-lang',STATE.lang);
+  document.getElementById('brandTitle').textContent=T("brand");
+  document.querySelectorAll('.langswitch button').forEach(b=>b.setAttribute('aria-pressed', b.dataset.lang===STATE.lang));
+  const modeBtn=document.getElementById('modeToggle');
+  modeBtn.textContent = STATE.officer? T("switch_to_public") : T("switch_to_officer");
+
+  const navSet = STATE.officer? OFFICER_NAV : NAV;
+  const bottom=document.getElementById('bottomNav');
+  bottom.innerHTML="";
+  navSet.forEach(n=>{
+    const b=document.createElement('button');
+    b.type="button"; b.setAttribute('aria-current', STATE.screen===n.id);
+    b.innerHTML=`<span class="ic">${n.ic}</span><span>${T(n.labelKey)}</span>`;
+    b.onclick=()=>{STATE.screen=n.id; render();};
+    bottom.appendChild(b);
+  });
+  const sidebar=document.getElementById('sidebarNav');
+  sidebar.innerHTML="";
+  const sideSet = STATE.officer? OFFICER_NAV.concat({id:"shelter",ic:"🏘️",labelKey:"nav_shelter"},{id:"offline",ic:"📴",labelKey:"nav_offline"}) : NAV.concat(NAV_MORE);
+  sideSet.forEach(n=>{
+    const b=document.createElement('button');
+    b.type="button"; b.setAttribute('aria-current', STATE.screen===n.id);
+    b.innerHTML=`<span>${n.ic}</span><span>${T(n.labelKey)}</span>`;
+    b.onclick=()=>{STATE.screen=n.id; render();};
+    sidebar.appendChild(b);
+  });
+  document.getElementById('sosFab').onclick=()=>{STATE.screen='sos'; render();};
+  document.getElementById('sosFab').classList.toggle('hidden', STATE.officer);
+}
+
+/* ---------------- Screen: Home ---------------- */
+function screenHome(){
+  const s=scen();
+  const off=!isOnline();
+  return `
+  <div class="screen">
+    ${off? bannerOffline():""}
+    <div class="card" style="display:flex;justify-content:space-between;align-items:center;">
+      <div><div class="small">${T("currentarea")}</div><b>${s.area[STATE.lang]}</b></div>
+      <span class="pill demo">${T("demo_label")}</span>
+    </div>
+    <div class="status-card level-${s.risk}">
+      <div class="status-top">
+        <div class="status-emoji">${riskEmoji(s.risk)}</div>
+        <div><div class="status-title">${riskLabel(s.risk)}</div>
+        <div class="status-sub">${s.weather.forecast[STATE.lang]}</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <h2>${T("whatdo")}</h2>
+      <div class="bigbtn-grid">
+        <button class="bigbtn primary" onclick="goScreen('map')"><span class="ic">🛟</span>${T("btn_safety")}</button>
+        <button class="bigbtn" onclick="goScreen('shelter')"><span class="ic">🏠</span>${T("btn_shelter")}</button>
+        <button class="bigbtn" onclick="goScreen('map')"><span class="ic">🗺️</span>${T("btn_route")}</button>
+        <button class="bigbtn danger" onclick="goScreen('sos')"><span class="ic">🆘</span>${T("btn_sos")}</button>
+        <button class="bigbtn wide" onclick="speakCurrent()"><span class="ic">🔊</span>${T("btn_listen")}</button>
+      </div>
+    </div>
+    ${renderScenarioBar()}
+  </div>`;
+}
+function bannerOffline(){
+  return `<div class="banner offline">📴 ${T("nav_offline").toUpperCase()} — ${T("last_sync")}: 10:35 AM</div>`;
+}
+function renderScenarioBar(){
+  return `<div class="card">
+    <h2>${T("scenario_ctrl")} <span class="pill demo">${T("demo_label")}</span></h2>
+    <div class="scenariobar">
+      ${SCENARIO_ORDER.map(k=>`<button class="scenariochip" aria-pressed="${k===STATE.scenarioKey}" onclick="setScenario('${k}')">${SCENARIOS[k].name[STATE.lang]}</button>`).join("")}
+    </div>
+  </div>`;
+}
+
+/* ---------------- Screen: Weather ---------------- */
+function screenWeather(){
+  const s=scen();
+  return `<div class="screen">
+    <div class="card">
+      <h2>${T("weather_title")} <span class="pill demo">DEMO WEATHER</span></h2>
+      <div class="row" style="margin-top:6px;">
+        <div class="pill">🌧️ ${T("rain")}: ${s.weather.rain} mm</div>
+        <div class="pill">💨 ${T("wind")}: ${s.weather.wind} km/h</div>
+        <div class="pill">💧 ${T("humidity")}: ${s.weather.humidity}%</div>
+      </div>
+      <div style="margin-top:12px;"><b>${T("forecast")}:</b> ${s.weather.forecast[STATE.lang]}</div>
+      <div class="small" style="margin-top:8px;">${T("lastupdate")}: 10:35 AM · ${T("demo_label")}</div>
+    </div>
+    ${renderScenarioBar()}
+  </div>`;
+}
+
+/* ---------------- Screen: Risk / XAI ---------------- */
+function bar(val,label){
+  const cls = val>=70?"high":val>=40?"med":"low";
+  return `<div class="barrow"><div class="lbl"><span>${label}</span><span>${val}%</span></div>
+  <div class="track"><div class="fill ${cls}" style="width:${val}%"></div></div></div>`;
+}
+function screenRisk(){
+  const s=scen();
+  return `<div class="screen">
+    <div class="card">
+      <h2>${T("risk_title")} <span class="pill demo">SIMULATION RISK SCORE</span></h2>
+      <div class="status-top">
+        <div class="status-emoji">${riskEmoji(s.risk)}</div>
+        <div><div class="status-title" style="color:var(--ink)">${riskLabel(s.risk)}</div>
+        <div class="small">${T("riskscore")}: ${s.score} / 100</div></div>
+      </div>
+    </div>
+    <div class="card">
+      <div class="row" style="justify-content:space-between;align-items:center;">
+        <h2 style="margin:0;">${T("why")}</h2>
+        <div class="segmented">
+          <button aria-pressed="${!STATE.detailMode}" onclick="setDetail(false)">${T("simple_mode")}</button>
+          <button aria-pressed="${STATE.detailMode}" onclick="setDetail(true)">${T("detailed_mode")}</button>
+        </div>
+      </div>
+      ${STATE.detailMode? `
+      <div class="barchart" style="margin-top:14px;">
+        ${bar(s.factors.rain, "🌧️ "+T("why_rain"))}
+        ${bar(s.factors.water, "🌊 "+T("why_water"))}
+        ${bar(s.factors.elev, "⛰️ "+T("why_elev"))}
+        ${bar(s.factors.soil, "🌱 "+T("why_soil"))}
+        ${bar(s.factors.road, "🚧 "+T("why_road"))}
+      </div>` : `
+      <div style="margin-top:12px;display:flex;flex-direction:column;gap:8px;font-size:15px;">
+        ${s.factors.rain>=50?`<div>🌧️ ${T("why_rain")}</div>`:""}
+        ${s.factors.water>=50?`<div>🌊 ${T("why_water")}</div>`:""}
+        ${s.factors.elev<=35?`<div>⛰️ ${T("why_elev")}</div>`:""}
+        ${s.factors.soil>=60?`<div>🌱 ${T("why_soil")}</div>`:""}
+        ${s.factors.road>=50?`<div>🚧 ${T("why_road")}</div>`:""}
+      </div>`}
+      <div class="small" style="margin-top:10px;">DEMO XAI · SIMULATED MODEL EXPLANATION</div>
+    </div>
+    ${renderScenarioBar()}
+  </div>`;
+}
+
+/* ---------------- Screen: Map ---------------- */
+function screenMap(){
+  const s=scen();
+  return `<div class="screen">
+    <div class="card">
+      <h2>${T("map_title")} <span class="pill demo">${T("demo_label")}</span></h2>
+      <div id="map"></div>
+      <div class="maplegend">
+        <span><i class="dot" style="background:#1E8E5A"></i>${T("legend_safe")}</span>
+        <span><i class="dot" style="background:#B8860B"></i>${T("legend_caution")}</span>
+        <span><i class="dot" style="background:#C15A0E"></i>${T("legend_warn")}</span>
+        <span><i class="dot" style="background:#C62828"></i>${T("legend_flood")}</span>
+        <span><i class="dot" style="background:#7A0C0C"></i>${T("legend_critical")}</span>
+        <span>🏠 ${T("legend_shelter")}</span>
+        <span>🚧 ${T("legend_blocked")}</span>
+        <span>— ${T("legend_route")}</span>
+      </div>
+      <div class="small" style="margin-top:6px;">SIMULATED SAFETY ROUTE · DEMO SHELTER DATA</div>
+    </div>
+    ${renderScenarioBar()}
+  </div>`;
+}
+function zoneColor(t){return {safe:"#1E8E5A",caution:"#B8860B",warn:"#C15A0E",flood:"#C62828",critical:"#7A0C0C"}[t];}
+function buildMap(){
+  const el=document.getElementById('map'); if(!el || typeof L==='undefined') return;
+  const s=scen();
+  if(!STATE.map){
+    STATE.map=L.map('map',{zoomControl:true}).setView(s.center,13);
+    L.tileLayer('https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',{maxZoom:17,attribution:'© OpenStreetMap'}).addTo(STATE.map);
+    STATE.layerGroup=L.layerGroup().addTo(STATE.map);
+  } else {
+    STATE.map.setView(s.center,13);
+    STATE.layerGroup.clearLayers();
+  }
+  s.zones.forEach(z=>{
+    L.circle(z.pos,{radius:z.r,color:zoneColor(z.type),fillColor:zoneColor(z.type),fillOpacity:0.28,weight:2}).addTo(STATE.layerGroup);
+  });
+  s.roads.forEach(r=>{
+    L.polyline([r.from,r.to],{color:r.blocked?'#7A0C0C':'#1E8E5A',weight:5,dashArray:r.blocked?'2,10':null}).addTo(STATE.layerGroup)
+      .bindPopup(r.blocked?('🚧 '+T("legend_blocked")):('✅ '+T("legend_route")));
+  });
+  s.shelters.forEach(sh=>{
+    L.marker(sh.pos,{title:sh.name[STATE.lang]}).addTo(STATE.layerGroup).bindPopup(`🏠 ${sh.name[STATE.lang]} — ${T("available")}: ${sh.cap-sh.occ}`);
+  });
+  const safeRoad=s.roads.find(r=>!r.blocked);
+  if(safeRoad){
+    L.polyline([s.center,safeRoad.to],{color:'#0B5D6B',weight:4,dashArray:'8,6'}).addTo(STATE.layerGroup);
+  }
+  L.circleMarker(s.center,{radius:8,color:'#0B5D6B',fillColor:'#0B5D6B',fillOpacity:1}).addTo(STATE.layerGroup).bindPopup('📍 You');
+  setTimeout(()=>STATE.map.invalidateSize(),80);
+}
+
+/* ---------------- Screen: Shelter ---------------- */
+function screenShelter(){
+  const s=scen();
+  if(s.shelters.length===0){
+    return `<div class="screen">
+      <div class="card">
+        <h2>${T("shelter_title")}</h2>
+        <div class="banner offline" style="background:var(--high-bg);color:var(--high);">⚠️ ${T("shelter_unavailable")}</div>
+      </div>
+      ${renderScenarioBar()}
+    </div>`;
+  }
+  return `<div class="screen">
+    <div class="card"><h2>${T("shelter_title")} <span class="pill demo">DEMO SHELTER DATA</span></h2></div>
+    ${s.shelters.map((sh,i)=>{
+      const avail=sh.cap-sh.occ;
+      const nearFull = avail<=15;
+      return `<div class="card shelter-card">
+        <div class="shelter-head"><b>🏠 ${sh.name[STATE.lang]}</b>${nearFull?`<span class="pill bad">${T("shelter_full_warn")}</span>`:`<span class="pill ok">${T("available")}</span>`}</div>
+        <div class="small">${T("distance")}: ${sh.dist} km</div>
+        <div class="shelter-stats">
+          <div><b>${sh.cap}</b>${T("capacity")}</div>
+          <div><b>${sh.occ}</b>${T("occupied")}</div>
+          <div><b>${avail}</b>${T("available")}</div>
+        </div>
+        <div class="shelter-tags">
+          <span class="tag ${sh.med?"":"off"}">${T("medical")}: ${sh.med?"✓":"✕"}</span>
+          <span class="tag ${sh.food?"":"off"}">${T("food")}: ${sh.food?"✓":"✕"}</span>
+          <span class="tag ${sh.water?"":"off"}">${T("water")}: ${sh.water?"✓":"✕"}</span>
+          <span class="tag ${sh.access?"":"off"}">${T("access")}: ${sh.access?"✓":"✕"}</span>
+        </div>
+        <div class="shelter-actions">
+          <button class="btn-sm primary" onclick="goScreen('map')">${T("go_shelter")}</button>
+          <button class="btn-sm" onclick="goScreen('map')">${T("show_route")}</button>
+          <button class="btn-sm" onclick="speak('${sh.name[STATE.lang].replace(/'/g,"")}: '+T('available')+' '+avail)">${T("hear_details")}</button>
+        </div>
+      </div>`;
+    }).join("")}
+    ${renderScenarioBar()}
+  </div>`;
+}
+
+/* ---------------- Screen: SOS ---------------- */
+const SOS_NEEDS=[
+ {id:"boat",ic:"🛟",labelKey:"need_boat"},
+ {id:"medical",ic:"🚑",labelKey:"need_medical"},
+ {id:"trapped",ic:"👨‍👩‍👧",labelKey:"need_trapped"},
+ {id:"road",ic:"🚧",labelKey:"need_road"},
+ {id:"shelterhelp",ic:"🏠",labelKey:"need_shelterhelp"},
+];
+function screenSos(){
+  const s=scen();
+  const steps=[
+    {key:"sos_b",n:0},{key:"sos_c",n:1},{key:"sos_d",n:2},{key:"sos_e",n:3},{key:"sos_f",n:4}
+  ];
+  return `<div class="screen">
+    <div class="card">
+      <h2>🆘 ${T("sos_title")} <span class="pill demo">${T("demo_label")}</span></h2>
+      ${STATE.sos.step===0? `
+        <p style="margin:10px 0;font-weight:700;">${T("sos_whatneed")}</p>
+        <div class="sos-need-grid">
+          ${SOS_NEEDS.map(n=>`<div class="sos-need" role="button" tabindex="0" aria-pressed="${STATE.sos.need===n.id}" onclick="selectNeed('${n.id}')"><div style="font-size:24px;">${n.ic}</div>${T(n.labelKey)}</div>`).join("")}
+        </div>
+        <table class="status-table">
+          <tr><td>📍 ${T("location_avail")}</td><td>${scen().gps?"✅":"❌"}</td></tr>
+          <tr><td>🛰️ ${T("gps_avail")}</td><td>${scen().gps?"✅":"❌"}</td></tr>
+          <tr><td>🌐 ${T("internet_avail")}</td><td>${isOnline()?"✅":"❌ "+T("nav_offline")}</td></tr>
+        </table>
+        <button class="bigbtn danger wide" style="margin-top:12px;" ${STATE.sos.need?"":"disabled"} onclick="sendSos()">${T("send_sos")}</button>
+      ` : `
+        <div class="sos-timeline">
+          ${steps.map(st=>`<div class="sos-step ${STATE.sos.step===st.n+1?'active':''} ${STATE.sos.step>st.n+1?'done':''}">
+            <div class="node">${STATE.sos.step>st.n+1?"✓":st.n+1}</div>
+            <div class="txt"><b>${T(st.key)}</b>${st.n===2?`<span>${T("demo_label")}</span>`:""}</div>
+          </div>`).join("")}
+        </div>
+        ${STATE.sos.step>=2 && !isOnline() ? `
+        <div class="gsmbox">SOS#LOC:${s.center[0].toFixed(4)},${s.center[1].toFixed(4)}#NEED:${(STATE.sos.need||'HELP').toUpperCase()}#ROAD:BLOCKED
+— SIMULATED GSM MESSAGE —</div>`:""}
+        <div class="row" style="margin-top:14px;">
+          <button class="btn-sm" onclick="advanceSos()" ${STATE.sos.step>=5?"disabled":""}>${STATE.sos.step>=5? "✓":(T("nav_sos")+" →")}</button>
+          <button class="btn-sm" onclick="resetSos()">${T("repeat")==="repeat"?"Reset":"↺"}</button>
+        </div>
+      `}
+    </div>
+    ${renderScenarioBar()}
+  </div>`;
+}
+
+/* ---------------- Screen: Alerts ---------------- */
+function screenAlerts(){
+  const s=scen();
+  return `<div class="screen">
+    <div class="card">
+      <h2>📢 ${T("alerts_title")}</h2>
+      <table class="status-table">
+        <tr><td>${T("sms")}</td><td><span class="pill demo">${s.sms?T("ready_config"):T("ready_config")}</span></td></tr>
+        <tr><td>${T("whatsapp")}</td><td><span class="pill demo">${T("ready_config")}</span></td></tr>
+        <tr><td>${T("emg_alert")}</td><td><span class="pill demo">${T("simulated")}</span></td></tr>
+        <tr><td>${T("gsm")}</td><td><span class="pill demo">${T("demo_mode")}</span></td></tr>
+      </table>
+    </div>
+    ${s.needAlert? `<div class="card">
+      <h2>${riskLabel(s.risk)} → ${T("simulated")}</h2>
+      <div class="timeline-track">
+        ${["CRITICAL RISK","OFFICER","ALERT SERVICE","SMS/WA/GSM","DELIVERY"].map((t,i)=>`<div class="timeline-node done"><div class="dot2"></div>${t}</div>`).join("")}
+      </div>
+      <div class="small">SIMULATED DELIVERY — ${T("demo_label")}</div>
+    </div>`:""}
+    ${renderScenarioBar()}
+  </div>`;
+}
+
+/* ---------------- Screen: Offline ---------------- */
+function screenOffline(){
+  const off=!isOnline();
+  return `<div class="screen">
+    <div class="card">
+      <h2>📴 ${T("offline_title")}</h2>
+      <button class="bigbtn ${off?'primary':''}" style="width:100%;" onclick="toggleInternet()">${off? T("simulate_on") : T("simulate_off")}</button>
+      <table class="status-table" style="margin-top:12px;">
+        <tr><td>🌐 ${T("nav_offline")}</td><td>${off?"🔴 OFFLINE":"🟢 ONLINE"}</td></tr>
+        <tr><td>🛰️ GPS</td><td>🟢 AVAILABLE</td></tr>
+        <tr><td>🗺️ ${T("nav_map")}</td><td>🟢 ${off?"CACHED":"LIVE"}</td></tr>
+        <tr><td>🏠 ${T("shelter_title")}</td><td>🟢 ${off?"CACHED":"LIVE"}</td></tr>
+        <tr><td>ℹ️ Safety info</td><td>🟢 AVAILABLE</td></tr>
+        <tr><td>${T("last_sync")}</td><td>10:35 AM</td></tr>
+      </table>
+    </div>
+    <div class="card">
+      <h2>${T("cache_radius")} <span class="pill demo">SIMULATED OFFLINE CACHE</span></h2>
+      <div class="row">
+        ${[5,10,20,30].map(km=>`<button class="scenariochip" aria-pressed="${STATE.cacheRadius===km}" onclick="setCacheRadius(${km})">${km} km</button>`).join("")}
+      </div>
+      <div class="pill ok" style="margin-top:10px;">✓ ${T("cache_ready")}</div>
+    </div>
+    ${renderScenarioBar()}
+  </div>`;
+}
+
+/* ---------------- Screen: Report ---------------- */
+const REPORT_OPTS=[
+ {id:"flooded",ic:"🌊",labelKey:"rep_flooded"},{id:"bridge",ic:"🌉",labelKey:"rep_bridge"},
+ {id:"trapped",ic:"🏠",labelKey:"rep_trapped"},{id:"blocked",ic:"🚧",labelKey:"rep_blocked"},
+ {id:"rising",ic:"💧",labelKey:"rep_rising"},{id:"other",ic:"📍",labelKey:"rep_other"},
+];
+function screenReport(){
+  return `<div class="screen">
+    <div class="card">
+      <h2>📝 ${T("report_title")}</h2>
+      <div class="formgrid">
+        ${REPORT_OPTS.map(o=>`<div class="report-opt" role="button" tabindex="0" aria-pressed="${STATE.reportOpt===o.id}" onclick="selectReport('${o.id}')">${o.ic} ${T(o.labelKey)}</div>`).join("")}
+      </div>
+      <button class="bigbtn primary wide" style="margin-top:12px;" ${STATE.reportOpt?"":"disabled"} onclick="submitReport()">${T("submit_report")}</button>
+      ${STATE.reportSubmitted? `<div class="banner info" style="margin-top:12px;">✅ ${T("report_created")} — ${T("simulated")}</div>`:""}
+    </div>
+  </div>`;
+}
+
+/* ---------------- Screen: Officer ---------------- */
+function screenOfficer(){
+  const s=scen();
+  return `<div class="screen">
+    <div class="card">
+      <h2>👮 ${T("officer_dash")} <span class="pill demo">${T("demo_label")}</span></h2>
+      <div class="small" style="margin-bottom:6px;">${T("scenario_ctrl")}</div>
+      <select onchange="setScenario(this.value)" style="width:100%;padding:12px;border-radius:10px;border:1px solid var(--line);font-weight:700;">
+        ${SCENARIO_ORDER.map(k=>`<option value="${k}" ${k===STATE.scenarioKey?"selected":""}>${SCENARIOS[k].name[STATE.lang]}</option>`).join("")}
+      </select>
+    </div>
+    <div class="officer-grid">
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card">
+          <h2>${T("incidents")}</h2>
+          <div class="incident-row"><span>${riskEmoji(s.risk)} ${s.area[STATE.lang]}</span><b>${riskLabel(s.risk)}</b></div>
+          <div class="incident-row"><span>🚧 ${T("legend_blocked")}</span><b>${s.roads.filter(r=>r.blocked).length}</b></div>
+          <div class="incident-row"><span>🏠 ${T("shelter_title")}</span><b>${s.shelters.length}</b></div>
+        </div>
+        <div class="card">
+          <h2>${T("rescue_teams")} <span class="pill demo">SIMULATION</span></h2>
+          ${RESCUE_TEAMS.map(t=>`<div class="incident-row"><span>🚤 ${t.id}</span><b>${t.status} · ${t.dist}km</b></div>`).join("")}
+        </div>
+      </div>
+      <div style="display:flex;flex-direction:column;gap:14px;">
+        <div class="card">
+          <h2>${T("system_status")}</h2>
+          <table class="status-table">
+            <tr><td>${T("weather_title")}</td><td>🟢 DEMO READY</td></tr>
+            <tr><td>${T("risk_title")}</td><td>🟢 DEMO READY</td></tr>
+            <tr><td>XAI</td><td>🟢 DEMO READY</td></tr>
+            <tr><td>GIS</td><td>🟢 DEMO READY</td></tr>
+            <tr><td>${T("shelter_title")}</td><td>🟢 DEMO READY</td></tr>
+            <tr><td>${T("sms")}</td><td>🟡 SIMULATION</td></tr>
+            <tr><td>${T("whatsapp")}</td><td>🟡 SIMULATION</td></tr>
+            <tr><td>${T("nav_offline")} Cache</td><td>🟢 SIMULATION</td></tr>
+            <tr><td>${T("gsm")}</td><td>🟡 SIMULATION</td></tr>
+          </table>
+        </div>
+      </div>
+    </div>
+  </div>`;
+}
+
+/* ---------------- Router ---------------- */
+function goScreen(id){STATE.screen=id; render();}
+function setScenario(k){STATE.scenarioKey=k; STATE.sos={step:0,need:null,acknowledged:false}; render();}
+function setDetail(v){STATE.detailMode=v; render();}
+function selectNeed(id){STATE.sos.need=id; render();}
+function sendSos(){STATE.sos.step=1; render(); setTimeout(()=>{STATE.sos.step=2; render();},900); setTimeout(()=>{STATE.sos.step=3; render();},2200);}
+function advanceSos(){if(STATE.sos.step<5){STATE.sos.step++; render();}}
+function resetSos(){STATE.sos={step:0,need:null,acknowledged:false}; render();}
+function toggleInternet(){STATE.internetOverride = isOnline()? false : true; render();}
+function setCacheRadius(km){STATE.cacheRadius=km; render();}
+function selectReport(id){STATE.reportOpt=id; render();}
+function submitReport(){STATE.reportSubmitted=true; render();}
+
+function speak(text){
+  if(!('speechSynthesis' in window)) return;
+  window.speechSynthesis.cancel();
+  const u=new SpeechSynthesisUtterance(text);
+  u.lang=SPEECH_LANG[STATE.lang];
+  window.speechSynthesis.speak(u);
+}
+function speakCurrent(){
+  const s=scen();
+  const text = STATE.lang==='ta'
+   ? `${riskLabel(s.risk)}. ${s.weather.forecast.ta}. ${T("btn_safety")}.`
+   : STATE.lang==='hi'
+   ? `${riskLabel(s.risk)}. ${s.weather.forecast.hi}. ${T("btn_safety")}.`
+   : `${riskLabel(s.risk)}. ${s.weather.forecast.en}. ${T("btn_safety")}.`;
+  speak(text);
+}
+
+/* ---------------- Main render ---------------- */
+function render(){
+  renderShell();
+  const c=document.getElementById('content');
+  let html="";
+  const screen = STATE.officer && STATE.screen==='home' ? 'officer' : STATE.screen;
+  switch(screen){
+    case 'home': html=screenHome(); break;
+    case 'weather': html=screenWeather(); break;
+    case 'risk': html=screenRisk(); break;
+    case 'map': html=screenMap(); break;
+    case 'shelter': html=screenShelter(); break;
+    case 'sos': html=screenSos(); break;
+    case 'alerts': html=screenAlerts(); break;
+    case 'offline': html=screenOffline(); break;
+    case 'report': html=screenReport(); break;
+    case 'officer': html=screenOfficer(); break;
+    default: html=screenHome();
+  }
+  c.innerHTML=html;
+  if(screen==='map') buildMap();
+}
+
+document.querySelectorAll('.langswitch button').forEach(b=>{
+  b.addEventListener('click',()=>{STATE.lang=b.dataset.lang; render();});
+});
+document.getElementById('modeToggle').addEventListener('click',()=>{
+  STATE.officer=!STATE.officer; STATE.screen= STATE.officer? 'officer':'home'; render();
+});
+
+if(!STATE.officer) STATE.screen='home';
+render();
+</script>
+</body>
+</html>
